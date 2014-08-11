@@ -22,6 +22,8 @@
     window._vvvvvv = {};
 
     var app = window._vvvvvv,
+        ui = window._ui,
+        cookie = $.cookie,
         $window = $(window),
         $canvas = $('.vvvvvv'),
         $canvasWrap = $canvas.parent(),
@@ -62,7 +64,12 @@
             'STATE_MENU_OPENED': 'menu_opened',
             'STATE_MENU_ITEM_OPENED': 'menu_item_opened',
             'STATE_MENU_ITEM_CLOSED': 'menu_item_closed',
-            'STATE_MENU_CLOSED': 'menu_closed'
+            'STATE_MENU_CLOSED': 'menu_closed',
+
+            'STATE_GAME_STARTED': 'game_started',
+            'STATE_GAME_PAUSED': 'game_paused',
+            'STATE_GAME_RESUMED': 'game_resumed',
+            'STATE_GAME_ENDED': 'game_ended'
         },
         keyCodes = {
             'down':   40,
@@ -118,6 +125,12 @@
         return _this;
     };
 
+    app.destroy = function () {
+        var _this = this;
+
+        _this.destroyMenu();
+    };
+
     /**
      * MENU OPERATIONS -------------------------------------------------------------------------------------------------
      */
@@ -163,7 +176,8 @@
             .drawText($.extend({}, baseMenuTextLayer, {
                 name: 'menuItem_1',
                 x: 20 + constats.menuStartX, y: 10 + constats.menuStartY,
-                text: 'Continue'
+                text: 'Continue',
+                opacity: (cookie('vvvvvv-progress') ? 1 : .2)
             }))
             .drawText($.extend({}, baseMenuTextLayer, {
                 name: 'menuItem_2',
@@ -225,7 +239,7 @@
         switch (event.keyCode){
             case (keyCodes.up):
             case (keyCodes.right):
-                if ( _this.options.currentMenuItemNumber !== 1 ) {
+                if ( _this.options.currentMenuItemNumber !== (cookie('vvvvvv-progress') ? 1 : 2) ) {
                     _this.options.currentMenuItemNumber--;
                 }
                 else {
@@ -241,7 +255,7 @@
                     _this.options.currentMenuItemNumber++;
                 }
                 else {
-                    _this.options.currentMenuItemNumber = 1;
+                    _this.options.currentMenuItemNumber = (cookie('vvvvvv-progress') ? 1 : 2);
                 }
 
                 _this.setMenuItemByNumber(_this.options.currentMenuItemNumber);
@@ -414,7 +428,28 @@
         var _this = this;
 
         _this.setState(states.STATE_MENU_ITEM_OPENED, {'item': _this.options.currentMenuItem});
+
+        ui.interactionMessage('open', 'close-dialog', {
+            'title': 'You are going to leave the game...',
+            'text': 'It seems you are leaving now. All unsaved progress will be lost.<br/><strong>Are you shure?</strong>',
+            'successButtonText': 'Yes',
+            'defaultButtonText': 'No',
+            'successAction': function () {
+                _this.destroy();
+
+                window.close();
+            },
+            'defaultAction': function () {
+                ui.interactionMessage('destroy', 'close-dialog');
+            }
+        });
     };
+
+    /**
+     * GAME ------------------------------------------------------------------------------------------------------------
+     */
+
+
 
     /**
      * UTILITIES -------------------------------------------------------------------------------------------------------
