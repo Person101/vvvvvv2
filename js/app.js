@@ -24,10 +24,12 @@
     var app = window._vvvvvv,
         ui = window._ui,
         cookie = $.cookie,
+        removeCookie = $.removeCookie,
         $window = $(window),
         $canvas = $('.vvvvvv'),
         $canvasWrap = $canvas.parent(),
         constats = {
+            'levels': 7,
             'width': 640,
             'height': 480,
             'menuFontSize': 36,
@@ -55,9 +57,12 @@
             'STATE_CLEARED': 'cleared',
 
             'STATE_LOADING': 'loading',
+            'STATE_DATA_LOADING': 'data_loading',
             'STATE_LOADED': 'loaded',
+            'STATE_DATA_LOADED': 'data_loaded',
             'STATE_INITIALIZED': 'initialized',
             'STATE_READY': 'ready',
+            'STATE_DATA_READY': 'data_ready',
 
             'STATE_REDRAWN': 'redrawn',
 
@@ -80,6 +85,7 @@
             'escape': 27,
             'enter':  13
         },
+        levels = [],
         baseMenuTextLayer = {
             layer: true,
             groups: ['menuItems'],
@@ -114,13 +120,19 @@
 
         _this.clearCanvas();
 
-        _this.endLoading();
+        _this.loadLevels();
 
-        _this.setMenuItemByNumber();
+        $canvas.on('statechange', function (event, data) {
+            if ( data.currentState === states.STATE_DATA_READY ) {
+                _this.endLoading();
 
-        _this.setState(states.STATE_INITIALIZED);
+                _this.setMenuItemByNumber();
 
-        _this.generateMenuScreen();
+                _this.setState(states.STATE_INITIALIZED);
+
+                _this.generateMenuScreen();
+            }
+        });
 
         return _this;
     };
@@ -308,6 +320,107 @@
     };
 
     /**
+     * LEVEL OPERATIONS ------------------------------------------------------------------------------------------------
+     */
+
+    /**
+     *
+     * @returns {window._vvvvvv}
+     */
+    app.loadLevels = function () {
+        var _this = this;
+
+        for (var i = 1; i <= constats.levels; i++) {
+            _this.loadLevelData(i);
+        }
+
+        return _this;
+    }
+
+    /**
+     *
+     * @param level
+     */
+    app.loadLevelData = function (level) {
+        var _this = this,
+            result,
+            request = $.ajax({
+                url: "levels/level" + level + ".txt",
+                beforeSend: function(xhr) {
+                    xhr.overrideMimeType( "text/plain; charset=x-user-defined" );
+                    _this.setState(states.STATE_DATA_LOADING);
+                },
+                context: document.body
+            });
+
+        request
+            .done(function(data) {
+                result = {
+                    'level': level,
+                    'data': data
+                };
+
+                levels[level] = result;
+
+                _this.setState(states.STATE_DATA_LOADED, result);
+            })
+            .always(function () {
+                if (level === constats.levels) {
+                    _this.setState(states.STATE_DATA_READY);
+                }
+            });
+    };
+
+    /**
+     * GAME OPERATIONS -------------------------------------------------------------------------------------------------
+     */
+
+    /**
+     *
+     */
+    app.startGame = function (level) {
+        var _this = this;
+
+        if ( cookie('vvvvvv-progress') && !level ) {
+            ui.interactionMessage('open', 'start-new-game', {
+                'title': 'Hmm... You have saved progress',
+                'text': 'We found some progress data of your previous game. If you\'ll start new game, all your previous progress will be lost!<br/><strong>Do you want to proceed?</strong>',
+                'successButtonText': 'Yes',
+                'defaultButtonText': 'No',
+                'successAction': function () {
+                    removeCookie('vvvvvv-progress');
+
+                    ui.interactionMessage('destroy', 'start-new-game');
+
+                    _this.startGame(1);
+                },
+                'defaultAction': function () {
+                    ui.interactionMessage('destroy', 'start-new-game');
+                }
+            });
+        }
+        else {
+            cookie('vvvvvv-progress', level);
+
+            _this.setState(states.STATE_GAME_STARTED, {'currentLevel': level});
+
+            _this.drawLevel(level);
+        }
+    };
+
+    app.drawLevel = function (level) {
+        var _this = this,
+            level = {
+                'image': 'levels/level' + level + '.jpg',
+                'data': levels[level].data
+            };
+
+        _this.clearCanvas();
+
+        _this.createSkyLayer();
+    };
+
+    /**
      * STATE OPERATIONS ------------------------------------------------------------------------------------------------
      */
 
@@ -361,7 +474,9 @@
     app.clearCanvas = function () {
         var _this = this;
 
-        $canvas.clearCanvas();
+        $canvas
+            .removeLayers()
+            .clearCanvas();
 
         _this.setState(states.STATE_CLEARED);
 
@@ -403,13 +518,13 @@
     app.menuActions.actionContinue = function () {
         var _this = this;
 
-        _this.setState(states.STATE_MENU_ITEM_OPENED, {'item': _this.options.currentMenuItem});
+        _this.startGame(cookie('vvvvvv-progress'));
     };
 
     app.menuActions.actionNewGame = function () {
         var _this = this;
 
-        _this.setState(states.STATE_MENU_ITEM_OPENED, {'item': _this.options.currentMenuItem});
+        _this.startGame();
     };
 
     app.menuActions.actionHowToPlay = function () {
@@ -449,7 +564,27 @@
      * GAME ------------------------------------------------------------------------------------------------------------
      */
 
+    app.createSkyLayer = function () {
+        var _this = this;
 
+        $canvas
+            .drawImage({
+                layer: true,
+                name: 'background',
+                source: 'assets/sky.png',
+                x: 0, y: 0,
+                width: constats.width * 2, height: constats.height,
+                index: 0,
+                fromCenter: false
+            })
+            .animateLayer('background', {
+                x: -constats.width
+            }, 2000, 'linear', function () {
+                $canvas.removeLayer('background');
+
+                _this.createSkyLayer();
+            });
+    };
 
     /**
      * UTILITIES -------------------------------------------------------------------------------------------------------
